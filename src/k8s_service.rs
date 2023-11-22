@@ -14,6 +14,7 @@ use tracing::{debug, info};
 #[derive(Serialize)]
 struct JobSummary {
     id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     status: Option<JobStatus>,
 }
 
@@ -24,13 +25,9 @@ async fn create_job(
     state: web::Data<state::AppState>,
 ) -> Result<impl Responder> {
     debug!("Job creation request: {:?}", body);
-    let ir = jq::first_result(&state.request_to_ir, body.into_inner())
-        .ok_or_else(|| error::ErrorBadRequest("IR filter didn't produce results"))?
-        .map_err(|e| error::ErrorBadRequest(format!("IR filter failed: {:?}", e)))?;
-    debug!("Job IR: {:?}", ir);
-    let raw_manifest = jq::first_result(&state.ir_to_manifest, ir)
-        .ok_or_else(|| error::ErrorBadRequest("Manifest filter didn't produce results"))?
-        .map_err(|e| error::ErrorBadRequest(format!("Manifest filter failed: {:?}", e)))?;
+    let raw_manifest = jq::first_result(&state.filter, body.into_inner())
+        .ok_or_else(|| error::ErrorBadRequest("Filter didn't produce results"))?
+        .map_err(|e| error::ErrorBadRequest(format!("Filter failed: {:?}", e)))?;
     debug!("Job raw manifest: {:?}", raw_manifest);
     let manifest: Job = serde_json::from_value(raw_manifest)
         .map_err(|e| error::ErrorBadRequest(format!("Generated manifest is invalid: {:?}", e)))?;
@@ -59,7 +56,7 @@ async fn create_job(
         );
         Ok(HttpResponse::Created().json(JobSummary {
             id: job.metadata.name,
-            status: job.status,
+            status: None,
         }))
     } else {
         info!(
@@ -72,7 +69,7 @@ async fn create_job(
         );
         Ok(HttpResponse::Ok().json(JobSummary {
             id: manifest.metadata.name,
-            status: manifest.status,
+            status: None,
         }))
     }
 }

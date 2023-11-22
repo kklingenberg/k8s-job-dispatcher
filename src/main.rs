@@ -9,20 +9,15 @@ use k8s_openapi::api::batch::v1::Job;
 use kube::{api::Api, Client, Config};
 use std::time::Duration;
 
-const DEFAULT_REQUEST_TO_IR_FILTER: &str = include_str!("request_to_ir.jq");
-const DEFAULT_IR_TO_MANIFEST_FILTER: &str = include_str!("ir_to_manifest.jq");
+const DEFAULT_FILTER: &str = include_str!("default_filter.jq");
 
 /// Job-dispatching interface acting as a thin wrapper over K8s API.
 #[derive(Parser)]
 #[command(version, about)]
 struct Cli {
-    /// Filter converting requests to internal representation
-    #[arg(long, env)]
-    request_to_ir: Option<String>,
-
-    /// Filter converting internal representation to a K8s manifest
-    #[arg(long, env)]
-    ir_to_manifest: Option<String>,
+    /// Filter converting requests to K8s manifests
+    #[arg(short, long, env)]
+    filter: Option<String>,
 
     /// TCP port to listen on
     #[arg(short, long, env, default_value_t = 8000)]
@@ -43,16 +38,8 @@ async fn main() -> std::io::Result<()> {
         .init();
 
     // Initialize application state
-    let request_to_ir = jq::compile(
-        &cli.request_to_ir
-            .unwrap_or_else(|| String::from(DEFAULT_REQUEST_TO_IR_FILTER)),
-    )
-    .expect("error compiling request-to-ir filter");
-    let ir_to_manifest = jq::compile(
-        &cli.ir_to_manifest
-            .unwrap_or_else(|| String::from(DEFAULT_IR_TO_MANIFEST_FILTER)),
-    )
-    .expect("error compiling ir-to-manifest filter");
+    let filter = jq::compile(&cli.filter.unwrap_or_else(|| String::from(DEFAULT_FILTER)))
+        .expect("error compiling filter");
     let mut k8s_config = Config::infer()
         .await
         .expect("error detecting K8s configuration");
@@ -61,12 +48,7 @@ async fn main() -> std::io::Result<()> {
     k8s_config.write_timeout = Some(Duration::from_secs(15));
     let k8s_client = Client::try_from(k8s_config).expect("error initializing K8s client");
     let k8s_jobs: Api<Job> = Api::default_namespaced(k8s_client.clone());
-    let appstate = web::Data::new(state::AppState::new(
-        request_to_ir,
-        ir_to_manifest,
-        k8s_client,
-        k8s_jobs,
-    ));
+    let appstate = web::Data::new(state::AppState::new(filter, k8s_client, k8s_jobs));
 
     // Boot the HTTP server
     HttpServer::new(move || {
