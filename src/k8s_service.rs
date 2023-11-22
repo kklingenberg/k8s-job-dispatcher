@@ -3,9 +3,9 @@
 use crate::jq;
 use crate::state;
 
-use actix_web::{error, get, post, web, Responder, Result};
+use actix_web::{error, get, post, web, HttpResponse, Responder, Result};
 use k8s_openapi::api::batch::v1::{Job, JobStatus};
-use kube::core::params::PostParams;
+use kube::{core::params::PostParams, Error};
 use serde::Serialize;
 use serde_json::Value;
 use tracing::{debug, info};
@@ -35,24 +35,46 @@ async fn create_job(
     let manifest: Job = serde_json::from_value(raw_manifest)
         .map_err(|e| error::ErrorBadRequest(format!("Generated manifest is invalid: {:?}", e)))?;
     debug!("Job manifest: {:?}", manifest);
-    let job = state
+    let job_opt = state
         .k8s_jobs
         .create(&PostParams::default(), &manifest)
         .await
-        .map_err(|e| {
-            error::ErrorBadRequest(format!("K8s server rejected job manifest: {:?}", e))
-        })?;
-    info!(
-        "Created job with ID {:?}",
-        job.metadata
-            .name
-            .clone()
-            .unwrap_or_else(|| String::from("<unknown>"))
-    );
-    Ok(web::Json(JobSummary {
-        id: job.metadata.name,
-        status: job.status,
-    }))
+        .map_or_else(
+            |e| match e {
+                Error::Api(response) if response.code == 409 => Ok(None),
+                _ => Err(error::ErrorBadRequest(format!(
+                    "K8s server rejected job manifest: {:?}",
+                    e
+                ))),
+            },
+            |job| Ok(Some(job)),
+        )?;
+    if let Some(job) = job_opt {
+        info!(
+            "Created job with ID {:?}",
+            job.metadata
+                .name
+                .clone()
+                .unwrap_or_else(|| String::from("<unknown>"))
+        );
+        Ok(HttpResponse::Created().json(JobSummary {
+            id: job.metadata.name,
+            status: job.status,
+        }))
+    } else {
+        info!(
+            "Pre-existing job with ID {:?}",
+            manifest
+                .metadata
+                .name
+                .clone()
+                .unwrap_or_else(|| String::from("<unknown>"))
+        );
+        Ok(HttpResponse::Ok().json(JobSummary {
+            id: manifest.metadata.name,
+            status: manifest.status,
+        }))
+    }
 }
 
 /// Fetch a K8s job by its ID.

@@ -4,7 +4,7 @@
 # the internal representation assumed by ir_to_manifest.
 
 {
-  name: "demo-job-" + cuid2,
+  name: "demo-job-" + (.id // cuid2),
   image: "busybox:latest",
   imagePullSecrets: [],
   command: ["echo", .phrase],
