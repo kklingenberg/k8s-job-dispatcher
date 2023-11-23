@@ -7,7 +7,9 @@ use actix_web::{web, App, HttpServer};
 use clap::Parser;
 use k8s_openapi::api::batch::v1::Job;
 use kube::{api::Api, Client, Config};
+use std::path::PathBuf;
 use std::time::Duration;
+use tracing::warn;
 
 const DEFAULT_FILTER: &str = include_str!("default_filter.jq");
 
@@ -16,8 +18,11 @@ const DEFAULT_FILTER: &str = include_str!("default_filter.jq");
 #[command(version, about)]
 struct Cli {
     /// Filter converting requests to K8s manifests
-    #[arg(short, long, env)]
     filter: Option<String>,
+
+    /// Read filter from a file
+    #[arg(short, long, env)]
+    from_file: Option<PathBuf>,
 
     /// TCP port to listen on
     #[arg(short, long, env, default_value_t = 8000)]
@@ -38,8 +43,18 @@ async fn main() -> std::io::Result<()> {
         .init();
 
     // Initialize application state
-    let filter = jq::compile(&cli.filter.unwrap_or_else(|| String::from(DEFAULT_FILTER)))
-        .expect("error compiling filter");
+    let filter_source = if let Some(filter_file) = cli.from_file {
+        if cli.filter.is_some() {
+            warn!("Filter given both as file and argument; argument will be ignored");
+        }
+        std::fs::read_to_string(filter_file)
+    } else if let Some(filter_str) = cli.filter {
+        Ok(filter_str)
+    } else {
+        warn!("No filter given; the default filter will be used");
+        Ok(DEFAULT_FILTER.to_string())
+    }?;
+    let filter = jq::compile(&filter_source).expect("error compiling filter");
     let mut k8s_config = Config::infer()
         .await
         .expect("error detecting K8s configuration");

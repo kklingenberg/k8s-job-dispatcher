@@ -6,21 +6,22 @@ use itertools::Itertools;
 pub use jaq_interpret::Filter;
 use jaq_interpret::{results::box_once, Ctx, FilterT, Native, ParseCtx, RcIter, RunPtr, Val};
 use serde_json::Value;
-use std::rc::Rc;
 use tracing::warn;
+
+/// Provide the captured environment variable set as a jaq object.
+fn jq_env() -> Val {
+    Val::obj(
+        std::env::vars()
+            .map(|(k, v)| (k.into(), Val::str(v)))
+            .collect(),
+    )
+}
 
 const JQ_EXTENSIONS: &[(&str, usize, RunPtr)] = &[
     ("cuid2", 0, |_, _| {
         box_once(Ok(Val::str(cuid2::create_id())))
     }),
-    // env is a standard filter missing from jaq
-    ("env", 0, |_, _| {
-        box_once(Ok(Val::obj(
-            std::env::vars()
-                .map(|(k, v)| (Rc::new(k), Val::str(v)))
-                .collect(),
-        )))
-    }),
+    ("env", 0, |_, _| box_once(Ok(jq_env()))),
 ];
 
 /// Provide native extensions to jaq.
@@ -32,7 +33,7 @@ fn jq_extensions() -> impl Iterator<Item = (String, usize, Native)> {
 
 /// Compile a filter.
 pub fn compile(filter: &str) -> Result<Filter> {
-    let mut defs = ParseCtx::new(Vec::new());
+    let mut defs = ParseCtx::new(vec!["ENV".to_string()]);
     defs.insert_natives(jaq_core::core());
     defs.insert_natives(jq_extensions());
     defs.insert_defs(jaq_std::std());
@@ -52,7 +53,7 @@ pub fn compile(filter: &str) -> Result<Filter> {
 pub fn first_result(filter: &Filter, input: Value) -> Option<Result<Value>> {
     let inputs = RcIter::new(core::iter::empty());
     let mut outputs = filter
-        .run((Ctx::new([], &inputs), Val::from(input)))
+        .run((Ctx::new([jq_env()], &inputs), Val::from(input)))
         .map(|r| r.map(Value::from).map_err(|e| anyhow!(e.to_string())));
     let first_result = outputs.next();
     if outputs.next().is_some() {
