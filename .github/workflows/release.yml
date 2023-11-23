@@ -43,3 +43,21 @@ jobs:
           asset_name: k8s-job-dispatcher
           tag: ${{ github.ref }}
           overwrite: true
+
+  docker:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Login
+        run: echo "${{ secrets.DOCKER_HUB_PASSWORD }}" | docker login -u plotter --password-stdin
+
+      - name: Build image
+        run: docker build --build-arg "VERSION=${{ github.ref_name }}"
+          -t "plotter/k8s-job-dispatcher:latest"
+          -t "plotter/k8s-job-dispatcher:${{ github.ref_name }}"
+          .
+
+      - name: Push image
+        run: docker push --all-tags plotter/k8s-job-dispatcher
