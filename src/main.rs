@@ -3,7 +3,7 @@ mod jq;
 mod k8s_service;
 mod state;
 
-use actix_web::{web, App, HttpServer};
+use actix_web::{middleware, web, App, HttpServer};
 use clap::Parser;
 use k8s_openapi::api::batch::v1::Job;
 use kube::{api::Api, Client, Config};
@@ -68,6 +68,7 @@ async fn main() -> std::io::Result<()> {
     // Boot the HTTP server
     HttpServer::new(move || {
         App::new()
+            .wrap(middleware::NormalizePath::trim())
             .app_data(appstate.clone())
             .service(health_service::liveness_check)
             .service(health_service::readiness_check)

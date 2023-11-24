@@ -6,6 +6,7 @@ use itertools::Itertools;
 pub use jaq_interpret::Filter;
 use jaq_interpret::{results::box_once, Ctx, FilterT, Native, ParseCtx, RcIter, RunPtr, Val};
 use serde_json::Value;
+use sha1::{Digest, Sha1};
 use tracing::warn;
 
 /// Provide the captured environment variable set as a jaq object.
@@ -22,6 +23,17 @@ const JQ_EXTENSIONS: &[(&str, usize, RunPtr)] = &[
         box_once(Ok(Val::str(cuid2::create_id())))
     }),
     ("env", 0, |_, _| box_once(Ok(jq_env()))),
+    ("@md5", 0, |_, cv| {
+        box_once(Ok(Val::str(format!(
+            "{:x}",
+            md5::compute(cv.1.to_string_or_clone().as_bytes())
+        ))))
+    }),
+    ("@sha1", 0, |_, cv| {
+        let mut hasher = Sha1::new();
+        hasher.update(cv.1.to_string_or_clone().as_bytes());
+        box_once(Ok(Val::str(format!("{:x}", hasher.finalize()))))
+    }),
 ];
 
 /// Provide native extensions to jaq.

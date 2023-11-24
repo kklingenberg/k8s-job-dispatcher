@@ -4,11 +4,11 @@
 
 {
   metadata: {
-    name: ($ENV.JOB_NAME_PREFIX // "demo-job-") + (.id // cuid2)
+    name: (($ENV.JOB_NAME_PREFIX // "demo-job-") + (.id // @sha1)) | .[:63]
   },
   spec: {
     activeDeadlineSeconds: try ($ENV.JOB_TTL | tonumber) catch 300,
-    backoffLimit: try ($ENV.JOB_RETRIES | tonumber) catch 0,
+    backoffLimit: try ($ENV.JOB_RETRIES | tonumber) catch 2,
     parallelism: 1,
     ttlSecondsAfterFinished: try ($ENV.JOB_KEEP_FOR | tonumber) catch 180,
     template: {
