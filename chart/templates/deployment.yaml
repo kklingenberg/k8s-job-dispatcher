@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "job-dispatcher.fullname" . }}
+  labels:
+    {{- include "job-dispatcher.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "job-dispatcher.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- mustMerge .Values.podAnnotations
+                      (dict "checksum/config" (.Values.filter | default "" | sha256sum))
+            | toYaml | nindent 8 }}
+      labels:
+        {{- include "job-dispatcher.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "job-dispatcher.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if not (empty .Values.filter) }}
+      volumes:
+        - name: filter
+          configMap:
+            name: {{ include "job-dispatcher.fullname" .}}-filter
+            items:
+              - key: filter.jq
+                path: filter.jq
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/usr/bin/k8s-job-dispatcher"]
+          args:
+            - --log-level
+            - "{{ .Values.logLevel }}"
+            - --port
+            - "{{ .Values.service.port }}"
+            {{- if not (empty .Values.filter) }}
+            - --from-file
+            - /etc/config/filter.jq
+            {{- end }}
+          {{- if not (empty .Values.filter) }}
+          volumeMounts:
+            - name: filter
+              mountPath: /etc/config
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

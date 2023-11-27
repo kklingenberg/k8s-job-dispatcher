@@ -1,0 +1,11 @@
+{{- if not (empty .Values.filter) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "job-dispatcher.fullname" . }}-filter
+  labels:
+    {{- include "job-dispatcher.labels" . | nindent 4 }}
+data:
+  filter.jq: |-
+    {{- .Values.filter | nindent 4 }}
+{{- end }}
