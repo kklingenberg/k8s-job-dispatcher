@@ -16,6 +16,25 @@ for example using `rewrite_by_lua_block`, and putting some effort into
 implementing the kubernetes authentication and service account discovery (this
 repo skips all of that thanks to the [kube](https://kube.rs/) library).
 
+## Synopsis
+
+```text
+Job-dispatching interface acting as a thin wrapper over K8s API
+
+Usage: k8s-job-dispatcher [OPTIONS] [FILTER]
+
+Arguments:
+  [FILTER]  Filter converting requests to K8s manifests
+
+Options:
+  -f, --from-file <FROM_FILE>  Read filter from a file [env: FROM_FILE=]
+  -p, --port <PORT>            TCP port to listen on [env: PORT=] [default: 8000]
+      --log-level <LOG_LEVEL>  Log level [env: LOG_LEVEL=] [default: INFO]
+  -h, --help                   Print help
+  -V, --version                Print version
+
+```
+
 ## Additional motivation
 
 Combined with a proper job queue such as [Kueue](https://kueue.sigs.k8s.io/)
