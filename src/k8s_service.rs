@@ -3,10 +3,10 @@
 use crate::jq;
 use crate::state;
 
-use actix_web::{error, get, post, web, HttpResponse, Responder, Result};
+use actix_web::{error, get, routes, web, HttpResponse, Responder, Result};
 use k8s_openapi::api::batch::v1::{Job, JobStatus};
 use kube::{core::params::PostParams, Error};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::{debug, info};
 
@@ -18,14 +18,25 @@ struct JobSummary {
     status: Option<JobStatus>,
 }
 
+/// A container for the create_job path information.
+#[derive(Deserialize)]
+struct PathInfo {
+    path: Option<String>,
+}
+
 /// Create a K8s job by converting the request body to a job manifest.
+#[routes]
 #[post("/job")]
+#[post("/job/{path:.*}")]
 async fn create_job(
+    path: web::Path<PathInfo>,
     body: web::Json<Value>,
     state: web::Data<state::AppState>,
 ) -> Result<impl Responder> {
-    debug!("Job creation request: {:?}", body);
-    let raw_manifest = jq::first_result(&state.filter, body.into_inner())
+    let path = format!("/job/{}", path.path.clone().unwrap_or_default());
+    let path = path.strip_suffix('/').map(String::from).unwrap_or(path);
+    debug!("Job creation request at {:?}: {:?}", path, body);
+    let raw_manifest = jq::first_result(&state.filter, body.into_inner(), &path)
         .ok_or_else(|| error::ErrorBadRequest("Filter didn't produce results"))?
         .map_err(|e| error::ErrorBadRequest(format!("Filter failed: {:?}", e)))?;
     debug!("Job raw manifest: {:?}", raw_manifest);
