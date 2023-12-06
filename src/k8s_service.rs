@@ -1,9 +1,10 @@
 //! Implements the creation and retrieval of K8s jobs.
 
+use crate::api_error::APIError;
 use crate::jq;
 use crate::state;
 
-use actix_web::{error, get, routes, web, HttpResponse, Responder, Result};
+use actix_web::{get, routes, web, HttpResponse, Responder, Result};
 use k8s_openapi::api::batch::v1::{Job, JobStatus};
 use kube::{core::params::PostParams, Error};
 use serde::{Deserialize, Serialize};
@@ -37,11 +38,11 @@ async fn create_job(
     let path = path.strip_suffix('/').map(String::from).unwrap_or(path);
     debug!("Job creation request at {:?}: {:?}", path, body);
     let raw_manifest = jq::first_result(&state.filter, body.into_inner(), &path)
-        .ok_or_else(|| error::ErrorBadRequest("Filter didn't produce results"))?
-        .map_err(|e| error::ErrorBadRequest(format!("Filter failed: {:?}", e)))?;
+        .ok_or_else(|| APIError::bad_request("Filter didn't produce results"))?
+        .map_err(|e| APIError::bad_request(format!("Filter failed: {:?}", e)))?;
     debug!("Job raw manifest: {:?}", raw_manifest);
     let manifest: Job = serde_json::from_value(raw_manifest)
-        .map_err(|e| error::ErrorBadRequest(format!("Generated manifest is invalid: {:?}", e)))?;
+        .map_err(|e| APIError::bad_request(format!("Generated manifest is invalid: {:?}", e)))?;
     debug!("Job manifest: {:?}", manifest);
     let job_opt = state
         .k8s_jobs
@@ -50,7 +51,7 @@ async fn create_job(
         .map_or_else(
             |e| match e {
                 Error::Api(response) if response.code == 409 => Ok(None),
-                _ => Err(error::ErrorBadRequest(format!(
+                _ => Err(APIError::bad_request(format!(
                     "K8s server rejected job manifest: {:?}",
                     e
                 ))),
@@ -95,8 +96,8 @@ async fn get_job(
         .k8s_jobs
         .get_opt(&id)
         .await
-        .map_err(error::ErrorBadGateway)?
-        .ok_or_else(|| error::ErrorNotFound("The specified job doesn't exist"))?;
+        .map_err(APIError::bad_gateway)?
+        .ok_or_else(|| APIError::not_found("The specified job doesn't exist"))?;
     info!(
         "Fetched job with ID {:?}",
         job.metadata

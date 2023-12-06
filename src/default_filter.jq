@@ -17,7 +17,7 @@
         imagePullSecrets: [$ENV.JOB_IMAGE_PULL_SECRET | strings | {name: .}],
         containers: [{
           name: ($ENV.JOB_NAME_PREFIX // "demo-job-") | rtrimstr("-"),
-          image: $ENV.JOB_IMAGE // "busybox:latest",
+          image: $ENV.JOB_IMAGE // "debian:stable-slim",
           command: [$ENV.JOB_COMMAND // "echo"],
           args: .args,
           env: [

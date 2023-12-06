@@ -1,9 +1,10 @@
+mod api_error;
 mod health_service;
 mod jq;
 mod k8s_service;
 mod state;
 
-use actix_web::{middleware, web, App, HttpServer};
+use actix_web::{middleware, web, App, Error, HttpResponse, HttpServer, Result as RouteResult};
 use clap::Parser;
 use k8s_openapi::api::batch::v1::Job;
 use kube::{api::Api, Client, Config};
@@ -31,6 +32,11 @@ struct Cli {
     /// Log level
     #[arg(long, env, default_value_t = tracing::Level::INFO)]
     log_level: tracing::Level,
+}
+
+/// Default 404 response
+async fn no_route() -> RouteResult<HttpResponse> {
+    Err::<_, Error>(api_error::APIError::not_found("Route not found").into())
 }
 
 #[actix_web::main]
@@ -74,6 +80,7 @@ async fn main() -> std::io::Result<()> {
             .service(health_service::readiness_check)
             .service(k8s_service::create_job)
             .service(k8s_service::get_job)
+            .default_service(web::route().to(no_route))
     })
     .bind(("0.0.0.0", cli.port))?
     .run()
