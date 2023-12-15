@@ -4,13 +4,17 @@ mod jq;
 mod k8s_service;
 mod state;
 
-use actix_web::{middleware, web, App, Error, HttpResponse, HttpServer, Result as RouteResult};
+use actix_web::{
+    http::header::ContentType, middleware, web, App, Error, HttpResponse, HttpServer,
+    Result as RouteResult,
+};
 use clap::Parser;
 use k8s_openapi::api::batch::v1::Job;
 use kube::{api::Api, Client, Config};
 use std::path::PathBuf;
 use std::time::Duration;
 use tracing::warn;
+use utoipa_rapidoc::RapiDoc;
 
 const DEFAULT_FILTER: &str = include_str!("default_filter.jq");
 
@@ -38,6 +42,9 @@ struct Cli {
 async fn no_route() -> RouteResult<HttpResponse> {
     Err::<_, Error>(api_error::APIError::not_found("Route not found").into())
 }
+
+/// OpenAPI schema
+const OPENAPI: &str = include_str!("openapi.json");
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -80,6 +87,15 @@ async fn main() -> std::io::Result<()> {
             .service(health_service::readiness_check)
             .service(k8s_service::create_job)
             .service(k8s_service::get_job)
+            .route(
+                "/openapi.json",
+                web::get().to(|| async {
+                    HttpResponse::Ok()
+                        .content_type(ContentType::json())
+                        .body(OPENAPI)
+                }),
+            )
+            .service(RapiDoc::new("/openapi.json").path("/docs"))
             .default_service(web::route().to(no_route))
     })
     .bind(("0.0.0.0", cli.port))?
