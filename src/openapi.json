@@ -66,16 +66,6 @@
                 }
               }
             }
-          },
-          "502": {
-            "description": "job generation failed while trying to communicate with the kubernetes API",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/APIError"
-                }
-              }
-            }
           }
         }
       }
@@ -130,16 +120,6 @@
           },
           "400": {
             "description": "job generation failed because of an invalid job manifest",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/APIError"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "job generation failed while trying to communicate with the kubernetes API",
             "content": {
               "application/json": {
                 "schema": {
