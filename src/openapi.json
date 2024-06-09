@@ -3,7 +3,7 @@
   "info": {
     "title": "K8s job dispatcher",
     "description": "This is a simple facade over the Kubernetes API that converts requests into Job workloads.",
-    "version": "v0.4.2"
+    "version": "v0.4.3"
   },
   "externalDocs": {
     "description": "Github repository",
